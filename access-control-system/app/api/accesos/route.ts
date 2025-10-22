@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     }
 
     await pool.query(
-      "INSERT INTO profesores (id, nombre, apellido) VALUES ($1, $2, $3)",
+      "INSERT INTO registros (rfid, nombre, apellido) VALUES ($1, $2, $3)",
       [id, nombre, apellido]
     );
 
