@@ -3,11 +3,13 @@ import { Pool } from "pg";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 export async function POST(req: Request) {
   try {
     const { id, nombre, apellido } = await req.json();
+
     if (!id || !nombre || !apellido) {
       return NextResponse.json({ success: false, error: "Faltan datos" });
     }
@@ -18,8 +20,11 @@ export async function POST(req: Request) {
     );
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ success: false, error: "Error al guardar" });
+  } catch (error: any) {
+    console.error("❌ Error al guardar:", error);
+    return NextResponse.json({
+      success: false,
+      error: error.message || "Error al guardar los datos",
+    });
   }
 }
