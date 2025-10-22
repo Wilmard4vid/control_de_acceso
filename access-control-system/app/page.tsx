@@ -9,14 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Clock, DoorOpen, DoorClosed, RefreshCw, Plus, Pencil, Trash2, UserCircle } from "lucide-react"
 import Image from "next/image"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
+  Input
+} from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -52,12 +46,10 @@ interface Professor {
 export default function AccessControlPage() {
   const [selectedProfessor, setSelectedProfessor] = useState<string>("")
   const [professors, setProfessors] = useState<Professor[]>([])
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingProfessor, setEditingProfessor] = useState<Professor | null>(null)
   const [formData, setFormData] = useState({
+    id: "",
     nombre: "",
     apellido: "",
-    rfid: "",
   })
 
   const [rooms, setRooms] = useState<Room[]>([
@@ -93,33 +85,57 @@ export default function AccessControlPage() {
     fetchProfessors()
   }, [])
 
+  // Trae la lista de profesores (para el select y para mostrar en la tabla)
   const fetchProfessors = async () => {
     try {
       const response = await fetch("/api/profesores")
       if (response.ok) {
         const data = await response.json()
+        // asumimos que el endpoint devuelve la lista directamente
         setProfessors(data)
+      } else {
+        console.error("Error fetching professors:", response.status)
       }
     } catch (error) {
       console.error("Error fetching professors:", error)
     }
   }
 
-  const handleAddProfessor = () => {
-    setEditingProfessor(null)
-    setFormData({ nombre: "", apellido: "", rfid: "" })
-    setIsDialogOpen(true)
-  }
+  // --- NUEVA PARTE: formulario simple inline para agregar profesor (id, nombre, apellido)
+  const handleAddProfessorSimple = async (e: React.FormEvent) => {
+    e.preventDefault()
+    // validación mínima
+    if (!formData.id.trim() || !formData.nombre.trim() || !formData.apellido.trim()) {
+      alert("Por favor completa ID, Nombre y Apellido.")
+      return
+    }
 
-  const handleEditProfessor = (professor: Professor) => {
-    setEditingProfessor(professor)
-    setFormData({
-      nombre: professor.nombre,
-      apellido: professor.apellido,
-      rfid: professor.rfid,
-    })
-    setIsDialogOpen(true)
+    try {
+      const res = await fetch("/api/profesores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: formData.id.trim(),
+          nombre: formData.nombre.trim(),
+          apellido: formData.apellido.trim(),
+        }),
+      })
+
+      if (res.ok) {
+        // refrescar lista y limpiar form
+        await fetchProfessors()
+        setFormData({ id: "", nombre: "", apellido: "" })
+        alert("Profesor agregado correctamente")
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert("Error al agregar profesor: " + (err?.error || res.statusText))
+      }
+    } catch (error) {
+      console.error("Error adding professor:", error)
+      alert("Error de conexión al servidor")
+    }
   }
+  // --- FIN NUEVA PARTE
 
   const handleDeleteProfessor = async (id: number) => {
     if (!confirm("¿Está seguro de eliminar este profesor?")) return
@@ -136,34 +152,6 @@ export default function AccessControlPage() {
     }
   }
 
-  const handleSubmitProfessor = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    try {
-      const url = editingProfessor ? `/api/profesores?id=${editingProfessor.id}` : "/api/profesores"
-      const method = editingProfessor ? "PUT" : "POST"
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      })
-
-      const result = await response.json()
-
-      if (result.success || response.ok) {
-        fetchProfessors()
-        setIsDialogOpen(false)
-        alert(editingProfessor ? "Profesor actualizado correctamente" : "Profesor agregado correctamente")
-      } else {
-        alert("Error: " + result.error)
-      }
-    } catch (error) {
-      console.error("Error saving professor:", error)
-      alert("Error al guardar profesor")
-    }
-  }
-
   const fetchAccessRecords = async () => {
     setIsLoading(true)
     try {
@@ -172,6 +160,9 @@ export default function AccessControlPage() {
 
       if (result.success) {
         setAccessRecords(result.data)
+      } else if (Array.isArray(result)) {
+        // en caso de que /api/accesos devuelva directamente la lista
+        setAccessRecords(result)
       }
     } catch (error) {
       console.error("Error fetching access records:", error)
@@ -296,6 +287,7 @@ export default function AccessControlPage() {
 
       <div className="max-w-7xl mx-auto p-6">
         <div className="space-y-6">
+          {/* --- CARD: Gestión de Profesores (REEMPLAZADA por formulario simple) --- */}
           <Card className="p-6 bg-white shadow-lg">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -304,12 +296,9 @@ export default function AccessControlPage() {
                 </div>
                 <h2 className="text-2xl font-bold text-[#1e293b]">Gestión de Profesores</h2>
               </div>
-              <Button onClick={handleAddProfessor} className="bg-[#00bcd4] hover:bg-[#0097a7] text-white">
-                <Plus className="w-4 h-4 mr-2" />
-                Agregar Profesor
-              </Button>
             </div>
 
+            {/* Select para elegir profesor (sigue usándose para abrir salones) */}
             <div className="mb-6">
               <Label htmlFor="professor-select" className="text-base font-semibold text-[#1e293b] mb-2 block">
                 Seleccionar Profesor para Abrir Salón
@@ -328,7 +317,51 @@ export default function AccessControlPage() {
               </Select>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* FORMULARIO SIMPLE INLINE: ID, NOMBRE, APELLIDO */}
+            <div className="mt-4">
+              <h3 className="text-lg font-semibold text-[#1e293b] mb-3">Agregar Profesor</h3>
+              <form onSubmit={handleAddProfessorSimple} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="prof-id" className="text-sm text-[#334155]">ID</Label>
+                  <Input
+                    id="prof-id"
+                    value={formData.id}
+                    onChange={(e) => setFormData({ ...formData, id: e.target.value })}
+                    required
+                    placeholder="Ej: RFID-12345"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prof-nombre" className="text-sm text-[#334155]">Nombre</Label>
+                  <Input
+                    id="prof-nombre"
+                    value={formData.nombre}
+                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    required
+                    placeholder="Ej: Juan"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prof-apellido" className="text-sm text-[#334155]">Apellido</Label>
+                  <Input
+                    id="prof-apellido"
+                    value={formData.apellido}
+                    onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
+                    required
+                    placeholder="Ej: Pérez"
+                  />
+                </div>
+
+                <div className="md:col-span-3 flex justify-end mt-2">
+                  <Button type="submit" className="bg-[#00bcd4] hover:bg-[#0097a7] text-white">
+                    Agregar Profesor
+                  </Button>
+                </div>
+              </form>
+            </div>
+
+            {/* Tabla reducida de profesores (solo lectura) */}
+            <div className="overflow-x-auto mt-6">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-gradient-to-r from-[#00bcd4] to-[#8bc34a] text-white">
@@ -347,27 +380,15 @@ export default function AccessControlPage() {
                     professors.map((prof, index) => (
                       <tr
                         key={prof.id}
-                        className={`border-b border-[#e2e8f0] ${
-                          index % 2 === 0 ? "bg-white" : "bg-[#f8fafc]"
-                        } hover:bg-[#e0f2f1] transition-colors`}
+                        className={`border-b border-[#e2e8f0] ${index % 2 === 0 ? "bg-white" : "bg-[#f8fafc]"} hover:bg-[#e0f2f1] transition-colors`}
                       >
                         <td className="p-3 text-[#1e293b] font-medium">
                           {prof.nombre} {prof.apellido}
                         </td>
                         <td className="p-3">
                           <div className="flex items-center justify-center gap-2">
-                            <Button
-                              onClick={() => handleEditProfessor(prof)}
-                              size="sm"
-                              className="bg-[#00bcd4] hover:bg-[#0097a7] text-white"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              onClick={() => handleDeleteProfessor(prof.id)}
-                              size="sm"
-                              className="bg-[#f87171] hover:bg-[#ef4444] text-white"
-                            >
+                            {/* Mantengo botón de eliminar por compatibilidad */}
+                            <Button onClick={() => handleDeleteProfessor(Number(prof.id))} size="sm" className="bg-[#f87171] hover:bg-[#ef4444] text-white">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
@@ -380,6 +401,7 @@ export default function AccessControlPage() {
             </div>
           </Card>
 
+          {/* --- Cards de Salones --- */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {rooms.map((room) => (
               <Card
@@ -431,6 +453,7 @@ export default function AccessControlPage() {
             ))}
           </div>
 
+          {/* --- Registro de accesos --- */}
           <Card className="p-6 bg-white shadow-lg">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -534,57 +557,6 @@ export default function AccessControlPage() {
           </Card>
         </div>
       </div>
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{editingProfessor ? "Editar Profesor" : "Agregar Profesor"}</DialogTitle>
-            <DialogDescription>
-              {editingProfessor ? "Modifica los datos del profesor" : "Completa los datos del nuevo profesor"}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmitProfessor}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="nombre">Nombre</Label>
-                <Input
-                  id="nombre"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="apellido">Apellido</Label>
-                <Input
-                  id="apellido"
-                  value={formData.apellido}
-                  onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="rfid">RFID (oculto en consultas)</Label>
-                <Input
-                  id="rfid"
-                  value={formData.rfid}
-                  onChange={(e) => setFormData({ ...formData, rfid: e.target.value })}
-                  required
-                  placeholder="Ej: RFID-001-CR"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" className="bg-[#00bcd4] hover:bg-[#0097a7] text-white">
-                {editingProfessor ? "Actualizar" : "Agregar"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -1,57 +1,25 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { NextResponse } from "next/server";
+import { Pool } from "pg";
 
-export const dynamic = "force-dynamic"
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-export async function GET() {
+export async function POST(req: Request) {
   try {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from("accesos")
-      .select("id, rfid, nombre_profesor, salon, hora_apertura, hora_cierre, estado")
-      .order("hora_apertura", { ascending: false })
-      .limit(100)
-
-    if (error) throw error
-
-    return NextResponse.json({ success: true, data: data || [] })
-  } catch (error) {
-    console.error("[v0] Error fetching accesos:", error)
-    return NextResponse.json({ success: false, error: "Error al obtener los accesos" }, { status: 500 })
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const supabase = await createClient()
-    const body = await request.json()
-    const { rfid, nombre_profesor, salon } = body
-
-    if (!rfid || !nombre_profesor || !salon) {
-      return NextResponse.json({ success: false, error: "Faltan datos requeridos" }, { status: 400 })
+    const { id, nombre, apellido } = await req.json();
+    if (!id || !nombre || !apellido) {
+      return NextResponse.json({ success: false, error: "Faltan datos" });
     }
 
-    const { data, error } = await supabase
-      .from("accesos")
-      .insert([
-        {
-          rfid,
-          nombre_profesor,
-          salon,
-          estado: "ABIERTO",
-        },
-      ])
-      .select()
+    await pool.query(
+      "INSERT INTO profesores (id, nombre, apellido) VALUES ($1, $2, $3)",
+      [id, nombre, apellido]
+    );
 
-    if (error) throw error
-
-    return NextResponse.json({
-      success: true,
-      message: "Acceso registrado correctamente",
-      data,
-    })
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[v0] Error creating acceso:", error)
-    return NextResponse.json({ success: false, error: "Error al registrar el acceso" }, { status: 500 })
+    console.error(error);
+    return NextResponse.json({ success: false, error: "Error al guardar" });
   }
 }

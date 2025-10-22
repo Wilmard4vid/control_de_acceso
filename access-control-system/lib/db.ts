@@ -1,34 +1,11 @@
-import mysql from "mysql2/promise"
 
-// Configuración de la conexión a MySQL
-const dbConfig = {
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "misionTic2022",
-  database: process.env.DB_NAME || "control_acceso_salones",
-  port: Number.parseInt(process.env.DB_PORT || "3306"),
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-}
+import { Pool } from 'pg';
 
-// Crear pool de conexiones
-let pool: mysql.Pool | null = null
+const pool = new Pool({
+  connectionString: 'postgresql://neondb_owner:npg_IrWQBC3GYT4A@ep-winter-surf-aebwgg7p-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
+  ssl: {
+    rejectUnauthorized: false, // necesario para conexiones externas
+  },
+});
 
-export function getPool() {
-  if (!pool) {
-    pool = mysql.createPool(dbConfig)
-  }
-  return pool
-}
-
-// Función helper para ejecutar queries
-export async function query<T = any>(sql: string, params?: any[]): Promise<T> {
-  const connection = await getPool().getConnection()
-  try {
-    const [results] = await connection.execute(sql, params)
-    return results as T
-  } finally {
-    connection.release()
-  }
-}
+export default pool;
